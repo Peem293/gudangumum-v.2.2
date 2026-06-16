@@ -10,6 +10,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +36,7 @@ class RequestReport extends Page implements HasForms, HasTable
     public bool $isProcessed = false;
     public ?string $startDate = null;
     public ?string $endDate = null;
+    public ?string $statusFilter = null;
 
     public function mount(): void
     {
@@ -45,7 +47,7 @@ class RequestReport extends Page implements HasForms, HasTable
     {
         return $schema
             ->components([
-                Grid::make(2)
+                Grid::make(3)
                     ->schema([
                         DatePicker::make('start_date')
                             ->label('Tanggal Mulai')
@@ -58,6 +60,16 @@ class RequestReport extends Page implements HasForms, HasTable
                             ->native(false)
                             ->displayFormat('d/m/Y')
                             ->afterOrEqual('start_date'),
+                        Select::make('status')
+                            ->label('Filter Status')
+                            ->options([
+                                'all'       => 'Semua Status',
+                                'pending'   => 'Pending',
+                                'approved'  => 'Approved',
+                                'completed' => 'Completed',
+                            ])
+                            ->default('all')
+                            ->native(false),
                     ])
             ])
             ->statePath('data');
@@ -67,17 +79,20 @@ class RequestReport extends Page implements HasForms, HasTable
     {
         $this->validate();
 
-        $this->startDate = $this->data['start_date'];
-        $this->endDate = $this->data['end_date'];
-        $this->isProcessed = true;
+        $this->startDate    = $this->data['start_date'];
+        $this->endDate      = $this->data['end_date'];
+        $status             = $this->data['status'] ?? 'all';
+        $this->statusFilter = ($status === 'all') ? null : $status;
+        $this->isProcessed  = true;
     }
 
     public function getPdfUrl(): string
     {
-        return route('reports.requests.print', [
+        return route('reports.requests.print', array_filter([
             'start_date' => $this->startDate,
-            'end_date' => $this->endDate,
-        ]);
+            'end_date'   => $this->endDate,
+            'status'     => $this->statusFilter,
+        ]));
     }
 
     public function exportExcel()
@@ -119,6 +134,10 @@ class RequestReport extends Page implements HasForms, HasTable
                     Carbon::parse($this->startDate)->startOfDay(),
                     Carbon::parse($this->endDate)->endOfDay()
                 ]);
+
+                if ($this->statusFilter) {
+                    $q->where('status', $this->statusFilter);
+                }
 
                 $user = Auth::user();
                 if ($user->hasRole('staf_unit')) {
@@ -178,6 +197,10 @@ class RequestReport extends Page implements HasForms, HasTable
                         Carbon::parse($this->startDate)->startOfDay(),
                         Carbon::parse($this->endDate)->endOfDay()
                     ]);
+
+                    if ($this->statusFilter) {
+                        $q->where('status', $this->statusFilter);
+                    }
 
                     $user = Auth::user();
                     if ($user->hasRole('staf_unit')) {

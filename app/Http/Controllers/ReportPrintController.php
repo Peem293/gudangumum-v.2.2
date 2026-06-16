@@ -14,16 +14,22 @@ class ReportPrintController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+            'status'     => 'nullable|in:pending,approved,completed,rejected',
         ]);
 
-        $startDate = Carbon::parse($request->start_date)->startOfDay();
-        $endDate = Carbon::parse($request->end_date)->endOfDay();
+        $startDate    = Carbon::parse($request->start_date)->startOfDay();
+        $endDate      = Carbon::parse($request->end_date)->endOfDay();
+        $statusFilter = $request->status; // null means semua status
 
         $user = auth()->user();
         $query = \App\Models\RequestDetail::query()
-            ->whereHas('request', function ($q) use ($startDate, $endDate, $user) {
+            ->whereHas('request', function ($q) use ($startDate, $endDate, $user, $statusFilter) {
                 $q->whereBetween('created_at', [$startDate, $endDate]);
+
+                if ($statusFilter) {
+                    $q->where('status', $statusFilter);
+                }
 
                 if ($user->hasRole('staf_unit')) {
                     $q->where('unit_id', $user->unit_id);
@@ -37,9 +43,10 @@ class ReportPrintController extends Controller
         $data = $query->with(['request.user', 'request.department', 'request.unit', 'item'])->get();
 
         return view('reports.request-print', [
-            'data' => $data,
-            'startDate' => Carbon::parse($request->start_date),
-            'endDate' => Carbon::parse($request->end_date),
+            'data'         => $data,
+            'startDate'    => Carbon::parse($request->start_date),
+            'endDate'      => Carbon::parse($request->end_date),
+            'statusFilter' => $statusFilter,
         ]);
     }
 

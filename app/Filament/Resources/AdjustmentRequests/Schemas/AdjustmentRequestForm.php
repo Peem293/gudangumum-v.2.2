@@ -85,7 +85,9 @@ class AdjustmentRequestForm
                 TextInput::make('status')
                     ->label('Status')
                     ->default('pending')
-                    ->disabled()
+                    ->disabled(function () {
+                        return !auth()->user()?->hasRole('administrator');
+                    })
                     ->dehydrated(),
 
                 Textarea::make('reason')

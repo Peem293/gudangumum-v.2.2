@@ -147,7 +147,19 @@
 
         <!-- Report Meta Info -->
         <div class="report-info">
-            <div>Periode: <span>{{ $startDate->format('d/m/Y') }} s/d {{ $endDate->format('d/m/Y') }}</span></div>
+            <div>
+                Periode: <span>{{ $startDate->format('d/m/Y') }} s/d {{ $endDate->format('d/m/Y') }}</span>
+                @if(!empty($statusFilter))
+                    &nbsp;|&nbsp; Filter Status:
+                    <span style="text-transform:uppercase; font-weight:700; color:
+                        @if($statusFilter === 'completed') #065f46
+                        @elseif($statusFilter === 'approved') #d97706
+                        @elseif($statusFilter === 'pending') #4b5563
+                        @elseif($statusFilter === 'rejected') #dc2626
+                        @endif
+                    ">{{ $statusFilter }}</span>
+                @endif
+            </div>
             <div>Dicetak oleh: <span>{{ auth()->user()->name }}</span></div>
             <div>Tanggal Cetak: <span>{{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</span></div>
         </div>
