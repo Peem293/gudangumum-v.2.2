@@ -28,7 +28,8 @@ class RequestForm
                     ->default('[Otomatis]')
                     ->disabled()
                     ->dehydrated()
-                    ->required(),
+                    ->required()
+                    ->hiddenOn('create'),
 
                 Select::make('user_id')
                     ->label('Staf Peminta')
@@ -76,14 +77,14 @@ class RequestForm
                             ->required()
                             ->live()
                             ->disabled($isReadOnly)
-                            ->afterStateUpdated(function ($set, $get, $state) {
+                            ->afterStateUpdated(function ($set, $get, $state, $statePath) {
                                 $item = Item::find($state);
                                 if ($item) {
-                                    $qty = (int)($get('qty_requested') ?? 1);
+                                    $qty = max(1, (int)($get('qty_requested') ?? 1));
                                     $set('price_at_transaction', $item->price);
                                     $set('subtotal', $item->price * $qty);
 
-                                    // Lakukan reservasi sementara untuk user ini
+                                    // Reservasi sementara
                                     $userId = Auth::id();
                                     if ($userId) {
                                         Request::reserveStockTemp($state, $userId, $qty);
@@ -92,7 +93,33 @@ class RequestForm
                                     $set('price_at_transaction', 0.00);
                                     $set('subtotal', 0.00);
                                 }
-                                self::updateTotalAmount($set, $get);
+
+                                // Parse current row key from state path
+                                $currentRowKey = null;
+                                if (preg_match('/details\.([^.]+)/', $statePath, $matches)) {
+                                    $currentRowKey = $matches[1];
+                                }
+
+                                // Hitung ulang total dari SEMUA item (query DB agar akurat)
+                                $allDetails = $get('../../details') ?? [];
+                                $total = 0;
+                                foreach ($allDetails as $key => $detail) {
+                                    if ($currentRowKey !== null && (string)$key === (string)$currentRowKey) {
+                                        $dItemId = $state;
+                                        $dQty    = max(1, (int)($get('qty_requested') ?? 1));
+                                    } else {
+                                        $dItemId = $detail['item_id'] ?? null;
+                                        $dQty    = max(1, (int)($detail['qty_requested'] ?? 1));
+                                    }
+
+                                    if ($dItemId) {
+                                        $dItem = Item::find($dItemId);
+                                        if ($dItem) {
+                                            $total += $dItem->price * $dQty;
+                                        }
+                                    }
+                                }
+                                $set('../../total_amount', $total);
                             }),
 
                         TextInput::make('qty_requested')
@@ -102,22 +129,50 @@ class RequestForm
                             ->required()
                             ->live()
                             ->disabled($isReadOnly)
-                            ->afterStateUpdated(function ($set, $get, $state) {
+                            ->afterStateUpdated(function ($set, $get, $state, $statePath) {
                                 $itemId = $get('item_id');
+                                $qty    = max(1, (int)$state);
+
                                 if ($itemId) {
                                     $item = Item::find($itemId);
                                     if ($item) {
                                         $set('price_at_transaction', $item->price);
-                                        $set('subtotal', $item->price * (int)$state);
+                                        $set('subtotal', $item->price * $qty);
 
-                                        // Lakukan reservasi sementara untuk user ini
+                                        // Reservasi sementara
                                         $userId = Auth::id();
                                         if ($userId) {
-                                            Request::reserveStockTemp($itemId, $userId, (int)$state);
+                                            Request::reserveStockTemp($itemId, $userId, $qty);
                                         }
                                     }
                                 }
-                                self::updateTotalAmount($set, $get);
+
+                                // Parse current row key from state path
+                                $currentRowKey = null;
+                                if (preg_match('/details\.([^.]+)/', $statePath, $matches)) {
+                                    $currentRowKey = $matches[1];
+                                }
+
+                                // Hitung ulang total dari SEMUA item (query DB agar akurat)
+                                $allDetails = $get('../../details') ?? [];
+                                $total = 0;
+                                foreach ($allDetails as $key => $detail) {
+                                    if ($currentRowKey !== null && (string)$key === (string)$currentRowKey) {
+                                        $dItemId = $get('item_id');
+                                        $dQty    = $qty;
+                                    } else {
+                                        $dItemId = $detail['item_id'] ?? null;
+                                        $dQty    = max(1, (int)($detail['qty_requested'] ?? 1));
+                                    }
+
+                                    if ($dItemId) {
+                                        $dItem = Item::find($dItemId);
+                                        if ($dItem) {
+                                            $total += $dItem->price * $dQty;
+                                        }
+                                    }
+                                }
+                                $set('../../total_amount', $total);
                             })
                             ->helperText(function ($get, $state, $livewire) {
                                 $itemId = $get('item_id');
@@ -187,7 +242,7 @@ class RequestForm
 
     public static function updateTotalAmount($set, $get): void
     {
-        $details = $get('details') ?? [];
+        $details = $get('details') ?? $get('../../details') ?? [];
         $total = 0;
 
         foreach ($details as $detail) {
@@ -197,5 +252,6 @@ class RequestForm
         }
 
         $set('total_amount', $total);
+        $set('../../total_amount', $total);
     }
 }

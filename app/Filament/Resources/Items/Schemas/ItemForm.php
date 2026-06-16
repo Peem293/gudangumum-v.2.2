@@ -38,6 +38,8 @@ class ItemForm
                 TextInput::make('stock')
                     ->required()
                     ->numeric()
+                    ->disabled()
+                    ->dehydrated()
                     ->default(0),
                 Select::make('unit')
                     ->label('Satuan')

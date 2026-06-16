@@ -83,19 +83,19 @@ class Dashboard extends Page
         $requestCompleted = (clone $requestQuery)->where('status', 'completed')->count();
         $requestOnProcess = (clone $requestQuery)->whereIn('status', ['pending', 'approved'])->count();
         $requestRejected = (clone $requestQuery)->where('status', 'rejected')->count();
-
+        
         $hasPurchasing = $this->canAccessPurchasing();
         
         $purchaseCompleted = 0;
         $purchaseOnProcess = 0;
         $purchaseDraft = 0;
-
+        
         if ($hasPurchasing) {
             $purchaseCompleted = PurchaseOrder::where('status', 'received')->count();
             $purchaseOnProcess = PurchaseOrder::where('status', 'ordered')->count();
             $purchaseDraft = PurchaseOrder::where('status', 'draft')->count();
         }
-
+        
         return [
             'requestCompleted' => $requestCompleted,
             'requestOnProcess' => $requestOnProcess,
@@ -116,29 +116,27 @@ class Dashboard extends Page
         if (!$user) {
             return [];
         }
-
+        
         $requestQuery = $this->getScopedRequestQuery();
         $hasPurchasing = $this->canAccessPurchasing();
-
+        
         $labels = [];
         $requestTrend = [];
         $purchaseTrend = [];
-
+        
         for ($i = 5; $i >= 0; $i--) {
             $date = Carbon::now()->subMonths($i);
             $monthName = $date->translatedFormat('F');
             $labels[] = $monthName;
-
+            
             $startOfMonth = $date->copy()->startOfMonth();
             $endOfMonth = $date->copy()->endOfMonth();
-
-            // Completed requests this month
+            
             $requestTrend[] = (clone $requestQuery)
                 ->where('status', 'completed')
                 ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
                 ->count();
-
-            // Received POs this month
+            
             if ($hasPurchasing) {
                 $purchaseTrend[] = PurchaseOrder::where('status', 'received')
                     ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
@@ -147,7 +145,7 @@ class Dashboard extends Page
                 $purchaseTrend[] = 0;
             }
         }
-
+        
         return [
             'labels' => $labels,
             'requestTrend' => $requestTrend,
@@ -165,11 +163,11 @@ class Dashboard extends Page
         if (!$user) {
             return [];
         }
-
+        
         $labels = [];
         $data = [];
         $title = '';
-
+        
         if ($user->hasRole(['administrator', 'direktur', 'manager_keuangan', 'admin_gudang'])) {
             $title = 'Distribusi Permintaan per Departemen';
             $results = Request::where('status', 'completed')
@@ -177,7 +175,6 @@ class Dashboard extends Page
                 ->groupBy('department_id')
                 ->with('department')
                 ->get();
-
             foreach ($results as $res) {
                 $labels[] = $res->department->name ?? 'Tanpa Departemen';
                 $data[] = (int) $res->total;
@@ -190,7 +187,6 @@ class Dashboard extends Page
                 ->groupBy('unit_id')
                 ->with('unit')
                 ->get();
-
             foreach ($results as $res) {
                 $labels[] = $res->unit->name ?? 'Tanpa Unit';
                 $data[] = (int) $res->total;
@@ -201,19 +197,18 @@ class Dashboard extends Page
                 $q->where('status', 'completed')
                     ->where('unit_id', $user->unit_id);
             })
-            ->select('item_id', DB::raw('sum(qty_requested) as total'))
-            ->groupBy('item_id')
-            ->with('item')
-            ->orderByDesc('total')
-            ->limit(5)
-            ->get();
-
+                ->select('item_id', DB::raw('sum(qty_requested) as total'))
+                ->groupBy('item_id')
+                ->with('item')
+                ->orderByDesc('total')
+                ->limit(5)
+                ->get();
             foreach ($results as $res) {
                 $labels[] = $res->item->name ?? 'Barang Tanpa Nama';
                 $data[] = (int) $res->total;
             }
         }
-
+        
         return [
             'labels' => $labels,
             'data' => $data,
