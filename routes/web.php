@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DocumentVerificationController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -25,4 +26,6 @@ Route::get('/admin/reports/purchase-orders/print', [App\Http\Controllers\ReportP
 Route::get('/admin/reports/adjustments/print', [App\Http\Controllers\ReportPrintController::class, 'printAdjustmentReport'])
     ->name('reports.adjustments.print')
     ->middleware('auth');
+
+Route::get('/verify-document', [DocumentVerificationController::class, 'verify'])->name('document.verify');
 

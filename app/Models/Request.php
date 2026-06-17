@@ -16,7 +16,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'status',
     'total_amount',
     'notes',
-    'approved_by_id'
+    'approved_by_id',
+    'signature',
+    'creator_signature',
 ])]
 class Request extends Model
 {

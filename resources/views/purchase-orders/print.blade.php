@@ -206,9 +206,9 @@
         <!-- Header -->
         <div class="header">
             <div class="company-details">
-                <h1>Gudang Umum Co.</h1>
-                <p>Kavling Industri Logistik Utama, Jakarta</p>
-                <p>Telp: (021) 8888-9999 | Email: logistik@gudang.com</p>
+                <h1>RS. HERMINA SOLO</h1>
+                <p>Jl. Kol. Sutarto No. 16, Jebres, Surakarta</p>
+                <p>Telp: (0271) 638989 | Email: logistik@gudang.com</p>
             </div>
             <div class="document-title">
                 <h2>Purchase Order</h2>
@@ -230,8 +230,8 @@
             <div class="info-section">
                 <h3>Tujuan Pengiriman</h3>
                 <div class="info-card">
-                    <p class="name">Gudang Utama Logistik</p>
-                    <p>Jl. Logistik Sentral No. 12, Jakarta Barat</p>
+                    <p class="name">RS. Hermina Solo</p>
+                    <p>Jl. Kol. Sutarto No. 16, Jebres, Surakarta</p>
                     <p>Penerima: Admin Gudang</p>
                 </div>
             </div>

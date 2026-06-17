@@ -22,6 +22,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Crypt;
+use Filament\Actions\Action;
 use UnitEnum;
 
 class UserResource extends Resource
@@ -213,6 +216,76 @@ class UserResource extends Resource
                     ->modalWidth('4xl'),
                 DeleteAction::make()
                     ->requiresConfirmation(),
+                Action::make('generateKeys')
+                ->label('Aktivasi TTD')
+                ->icon('heroicon-o-key')
+                ->color('success')
+                // Tombol ini hanya muncul jika user tersebut adalah Administrator
+                // Sesuaikan logika 'role' di bawah dengan struktur aplikasi kamu
+                ->visible(function () {
+                        return auth()->user()?->hasRole('administrator');
+                    }) 
+                // Minta konfirmasi sebelum generate kunci
+                ->requiresConfirmation()
+                ->modalHeading('Aktivasi TTD Digital')
+                ->modalDescription('Apakah Anda yakin ingin membuat kunci TTD Digital untuk user ini? Kunci lama (jika ada) akan digantikan.')
+                ->action(function ($record) {
+
+                    $opensslConfigPath = "C:/Program Files/PostgreSQL/psqlODBC/etc/openssl.cnf";
+
+                    // Alternatif backup jika dipindah ke Laragon standar
+                    if (!file_exists($opensslConfigPath)) {
+                        $opensslConfigPath = "D:/laragon/bin/php/php-" . PHP_VERSION . "-Win32-vs17-x64/extras/ssl/openssl.cnf";
+                    }
+
+                    // LOGIKA KRIPTOGRAFI OPENSSL
+                    $config = array(
+                        "digest_alg" => "sha256",
+                        "private_key_bits" => 2048,
+                        "private_key_type" => OPENSSL_KEYTYPE_RSA,
+                        "config" => $opensslConfigPath,
+                    );
+
+                    // PENTING: Seringkali di Windows/Laragon, OpenSSL butuh ditarik file config-nya secara manual jika throws error
+                    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                        // Laragon biasanya menyimpan openssl.cnf di folder apache atau postgresql (seperti di phpinfo kamu)
+                        // Kita arahkan secara dinamis jika sistem default-nya bermasalah
+                        $config["config"] = "D:/laragon/bin/php/php-" . PHP_VERSION . "-Win32-vs17-x64/extras/ssl/openssl.cnf";
+                        
+                        // Backup alternatif jika file di folder PHP tidak ketemu
+                        if (!file_exists($config["config"])) {
+                            $config["config"] = "C:/Program Files/PostgreSQL/psqlODBC/etc/openssl.cnf"; 
+                        }
+                    }
+
+                    // Generate sepasang kunci baru
+                    $res = openssl_pkey_new($config);
+
+                    // JIKA MASIH GAGAL, gunakan fallback tanpa array config (PHP akan pakai settingan default internal)
+                    if (!$res) {
+                        throw new \Exception("Gagal inisialisasi OpenSSL. Pastikan file config tersedia di: " . $opensslConfigPath . ". Error: " . openssl_error_string());
+                    }
+
+                    // 2. Ekstrak Private Key
+                    openssl_pkey_export($res, $privateKey, null, $config);
+
+                    // 3. Ekstrak Public Key
+                    $publicKeyDetails = openssl_pkey_get_details($res);
+                    $publicKey = $publicKeyDetails["key"];
+
+                    // 4. Simpan ke database dengan enkripsi aman pada Private Key
+                    $record->update([
+                        'private_key' => Crypt::encryptString($privateKey),
+                        'public_key' => $publicKey
+                    ]);
+
+                    // 5. Tampilkan notifikasi sukses di Filament
+                    Notification::make()
+                        ->title('Sukses!')
+                        ->body('Kunci TTD Digital untuk ' . $record->name . ' berhasil diaktifkan.')
+                        ->success()
+                        ->send();
+                }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

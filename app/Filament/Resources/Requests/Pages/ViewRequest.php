@@ -29,10 +29,43 @@ class ViewRequest extends ViewRecord
                         (Auth::user()->hasRole('administrator') || Auth::user()->department_id === $this->record->department_id);
                 })
                 ->action(function () {
+                    $approver = Auth::user();
+
+                    // 1. VALIDASI: Pastikan Atasan sudah melakukan Aktivasi TTD di Step 1
+                    if (!$approver->private_key) {
+                        Notification::make()
+                            ->title('Gagal Approve')
+                            ->body('Anda belum mengaktifkan Kunci TTD Digital. Silakan aktivasi terlebih dahulu di menu Users.')
+                            ->danger()
+                            ->send();
+                        return;
+                    }
+
+                    // 2. KUMPULKAN DATA UNIK: Menyusun string data krusial dokumen yang tidak boleh dimanipulasi
+                    // Gunakan properti bawaan kode kamu: $this->record
+                    // Silakan sesuaikan kolom detail (seperti code/nama/qty) jika nama kolom di databasemu berbeda
+                    $dataToSign = "DocID:" . $this->record->id . 
+                                "|Status:approved" .
+                                "|Approver:" . $approver->name .
+                                "|ApproverID:" . $approver->id;
+
+                    // 3. DEKRIP PRIVATE KEY ATASAN
+                    $privateKeyDecrypted = \Illuminate\Support\Facades\Crypt::decryptString($approver->private_key);
+
+                    // 4. PROSES SIGNING: Membuat Digital Signature unik dengan OpenSSL
+                    $signature = '';
+                    openssl_sign($dataToSign, $signature, $privateKeyDecrypted, OPENSSL_ALGO_SHA256);
+                    
+                    // Ubah hasil biner signature menjadi teks string base64 agar aman disimpan di DB
+                    $encodedSignature = base64_encode($signature);
+
+                    // 5. UPDATE DATABASE (Tetap menggunakan fungsi bawaanmu, hanya ditambah kolom signature)
                     $this->record->update([
                         'status' => 'approved',
                         'approved_by_id' => Auth::id(),
+                        'signature' => $encodedSignature, // Kolom baru yang ditambahkan dari hasil migrasi
                     ]);
+
                     Notification::make()->title('Permintaan Disetujui!')->success()->send();
                     $this->redirect($this->getResource()::getUrl('index'));
                 }),

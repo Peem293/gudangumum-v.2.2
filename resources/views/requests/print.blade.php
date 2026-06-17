@@ -248,9 +248,9 @@
             <thead>
                 <tr>
                     <th style="width: 40px;" class="text-center">No</th>
-                    <th>Nama Barang</th>
-                    <th style="width: 100px;" class="text-center">Satuan</th>
+                    <th style="width: 150px;">Nama Barang</th>
                     <th style="width: 80px;" class="text-center">Jumlah</th>
+                    <th style="width: 40px;" class="text-center">Satuan</th>
                     <th style="width: 130px;" class="text-right">Harga Satuan</th>
                     <th style="width: 130px;" class="text-right">Subtotal</th>
                 </tr>
@@ -260,8 +260,8 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td style="font-weight: 500; color: #111827;">{{ $detail->item->name }}</td>
-                    <td class="text-center">{{ $detail->item->unit }}</td>
                     <td class="text-center">{{ $detail->qty_requested }}</td>
+                    <td class="text-center">{{ $detail->item->unit }}</td>
                     <td class="text-right">Rp {{ number_format($detail->price_at_transaction, 0, ',', '.') }}</td>
                     <td class="text-right">Rp {{ number_format($detail->subtotal, 0, ',', '.') }}</td>
                 </tr>
@@ -282,12 +282,35 @@
         <!-- Signatures Section -->
         <div class="signatures-section">
             <div class="signature-box">
+                <div style="margin: 10px 0;">
+                    @if($request->creator_signature)
+                        <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
+                            {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'sig' => $request->creator_signature, 'type' => 'creator'])) !!}
+                        </div>
+                    @else
+                        <div style="margin-bottom: 65px; color: #666; font-size: 13px; padding-top: 15px;">
+                            ( Belum ada TTD )
+                        </div>
+                    @endif
+                </div>
                 <strong>{{ $request->user->name }}</strong>
                 <div class="role">Staf Peminta (Yang Mengajukan)</div>
             </div>
             <div class="signature-box">
+                <div style="margin: 10px 0;">
+                @if($request->signature)
+                    <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
+                        {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'sig' => $request->signature])) !!}
+                    </div>
+                @else
+                    <div style="margin-bottom: 60px; color: #dc2626; font-weight: bold; font-size: 14px;">
+                        BELUM DI-APPROVE
+                    </div>
+                @endif
+                </div>
+
                 <strong>{{ $request->approvedBy->name ?? '( .................................................... )' }}</strong>
-                <div class="role">Manager {{ $request->department->name }} (Menyetujui)</div>
+                <div class="role" style="font-size: 12px; color: gray;">Manager {{ $request->department->name }}</div>
             </div>
         </div>
 
