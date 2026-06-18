@@ -27,7 +27,8 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('gudangumum-v.2.2')
+            ->sidebarWidth('16rem')
             ->login()
             ->colors([
                 'primary' => Color::Amber,

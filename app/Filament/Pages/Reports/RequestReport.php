@@ -27,7 +27,7 @@ class RequestReport extends Page implements HasForms, HasTable
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
-    protected static ?string $navigationLabel = 'Laporan Permintaan Unit';
+    protected static ?string $navigationLabel = 'Permintaan Unit';
     protected static ?string $title = 'Laporan Permintaan Unit';
     protected string $view = 'filament.pages.reports.request-report';
     protected static ?int $navigationSort = 1;

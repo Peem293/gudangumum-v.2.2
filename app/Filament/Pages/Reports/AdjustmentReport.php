@@ -25,7 +25,7 @@ class AdjustmentReport extends Page implements HasForms, HasTable
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
-    protected static ?string $navigationLabel = 'Laporan Koreksi Stok';
+    protected static ?string $navigationLabel = 'Penyesuaian';
     protected static ?string $title = 'Laporan Koreksi Stok (Adjustment)';
     protected string $view = 'filament.pages.reports.adjustment-report';
     protected static ?int $navigationSort = 3;
@@ -40,7 +40,7 @@ class AdjustmentReport extends Page implements HasForms, HasTable
         $user = Auth::user();
         if (!$user) return false;
 
-        return $user->hasRole(['administrator', 'direktur', 'admin_gudang', 'manager_keuangan']);
+        return $user->hasRole(['administrator', 'direktur', 'admin_gudang', 'manager_keuangan', 'manager_jangum']);
     }
 
     public function mount(): void

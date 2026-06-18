@@ -114,6 +114,7 @@ class UserResource extends Resource
                                         }
                                         return Unit::where('department_id', $departmentId)
                                             ->orderBy('name')
+                                            ->orWhereNull('department_id')
                                             ->pluck('name', 'id')
                                             ->toArray();
                                     })

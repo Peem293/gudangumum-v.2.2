@@ -25,8 +25,8 @@ class PurchaseOrderReport extends Page implements HasForms, HasTable
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-presentation-chart-line';
     protected static string|UnitEnum|null $navigationGroup = 'Laporan';
-    protected static ?string $navigationLabel = 'Laporan Pembelian';
-    protected static ?string $title = 'Laporan Pembelian (PO)';
+    protected static ?string $navigationLabel = 'Pengadaan';
+    protected static ?string $title = 'Laporan Pengadaan Barang (PO)';
     protected string $view = 'filament.pages.reports.purchase-order-report';
     protected static ?int $navigationSort = 2;
 

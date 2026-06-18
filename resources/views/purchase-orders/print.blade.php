@@ -35,7 +35,7 @@
             margin: 0 0 5px 0;
             font-size: 24px;
             font-weight: 700;
-            color: #2563eb;
+            color: #1faf03ff;
         }
         .company-details p {
             margin: 2px 0;
@@ -288,12 +288,35 @@
         <!-- Signatures Section -->
         <div class="signatures-section">
             <div class="signature-box">
+                <div style="margin: 10px 0;">
+                    @if($purchaseOrder->created_signature)
+                        <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
+                            {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $purchaseOrder->id, 'sig' => $purchaseOrder->created_signature, 'type' => 'creator'])) !!}
+                        </div>
+                    @else
+                        <div style="margin-bottom: 65px; color: #666; font-size: 13px; padding-top: 15px;">
+                            ( Belum ada TTD )
+                        </div>
+                    @endif
+                </div>
                 <strong>{{ $purchaseOrder->user->name }}</strong>
-                <div class="role">Admin Gudang (Pembuat)</div>
+                <div class="role">Staf Peminta (Yang Mengajukan)</div>
             </div>
             <div class="signature-box">
+                <div style="margin: 10px 0;">
+                @if($purchaseOrder->approved_signature)
+                    <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
+                        {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $purchaseOrder->id, 'sig' => $purchaseOrder->approved_signature])) !!}
+                    </div>
+                @else
+                    <div style="margin-bottom: 60px; color: #dc2626; font-weight: bold; font-size: 14px;">
+                        BELUM DI-APPROVE
+                    </div>
+                @endif
+                </div>
+
                 <strong>{{ $purchaseOrder->approvedBy->name ?? '( .................................................... )' }}</strong>
-                <div class="role">Pihak Yang Menyetujui / Approval</div>
+                <div class="role" style="font-size: 12px; color: gray;">Manager {{ $purchaseOrder->approvedBy?->department?->name ?? 'Penunjang Umum' }}</div>
             </div>
         </div>
     </div>

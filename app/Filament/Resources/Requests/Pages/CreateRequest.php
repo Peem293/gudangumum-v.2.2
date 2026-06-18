@@ -62,8 +62,8 @@ class CreateRequest extends CreateRecord
         $creator = \Illuminate\Support\Facades\Auth::user();
         $record = $this->record;
         // ==========================================
-    // LOGIKA GENERATE SIGNATURE PEMINTA (TAMBAHAN)
-    // ==========================================
+        // LOGIKA GENERATE SIGNATURE PEMINTA (TAMBAHAN)
+        // ==========================================
         if ($creator && $creator->private_key) {
             // 1. Susun string unik data penanda tangan (Sama seperti alur sebelumnya)
             $dataToSign = "DocID:" . $record->id . 

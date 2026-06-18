@@ -18,7 +18,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'shipping_cost',
     'po_date',
     'status',
-    'grand_total'
+    'grand_total',
+    'created_signature',
+    'approved_signature',
 ])]
 class PurchaseOrder extends Model
 {
