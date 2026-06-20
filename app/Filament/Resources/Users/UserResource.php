@@ -232,7 +232,7 @@ class UserResource extends Resource
                 ->modalDescription('Apakah Anda yakin ingin membuat kunci TTD Digital untuk user ini? Kunci lama (jika ada) akan digantikan.')
                 ->action(function ($record) {
 
-                    $opensslConfigPath = "C:/Program Files/PostgreSQL/psqlODBC/etc/openssl.cnf";
+                    $opensslConfigPath = "/etc/ssl/openssl.cnf";
 
                     // Alternatif backup jika dipindah ke Laragon standar
                     if (!file_exists($opensslConfigPath)) {

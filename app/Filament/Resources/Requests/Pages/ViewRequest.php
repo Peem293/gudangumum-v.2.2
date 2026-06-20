@@ -30,40 +30,33 @@ class ViewRequest extends ViewRecord
                 })
                 ->action(function () {
                     $approver = Auth::user();
+                    $record = $this->record;
 
-                    // 1. VALIDASI: Pastikan Atasan sudah melakukan Aktivasi TTD di Step 1
                     if (!$approver->private_key) {
-                        Notification::make()
-                            ->title('Gagal Approve')
-                            ->body('Anda belum mengaktifkan Kunci TTD Digital. Silakan aktivasi terlebih dahulu di menu Users.')
-                            ->danger()
-                            ->send();
+                        Notification::make()->title('Gagal Approve')->body('Aktifkan Kunci TTD terlebih dahulu.')->danger()->send();
                         return;
                     }
 
-                    // 2. KUMPULKAN DATA UNIK: Menyusun string data krusial dokumen yang tidak boleh dimanipulasi
-                    // Gunakan properti bawaan kode kamu: $this->record
-                    // Silakan sesuaikan kolom detail (seperti code/nama/qty) jika nama kolom di databasemu berbeda
-                    $dataToSign = "DocID:" . $this->record->id . 
-                                "|Status:approved" .
-                                "|Approver:" . $approver->name .
-                                "|ApproverID:" . $approver->id;
-
-                    // 3. DEKRIP PRIVATE KEY ATASAN
+                    $cleanName = trim($approver->name);
+                    
+                    // Konsistensi format desimal wajib agar signature valid
+                    $formattedTotal = number_format((float)$record->total_amount, 2, '.', '');
+                    
+                    $dataToSign = "DocID:{$record->id}" .
+                                  "|ReqNo:{$record->request_number}" . 
+                                  "|Total:{$formattedTotal}" . 
+                                  "|Status:approved" .
+                                  "|Approver:{$cleanName}" .
+                                  "|ApproverID:{$approver->id}";
+                                  
                     $privateKeyDecrypted = \Illuminate\Support\Facades\Crypt::decryptString($approver->private_key);
-
-                    // 4. PROSES SIGNING: Membuat Digital Signature unik dengan OpenSSL
                     $signature = '';
                     openssl_sign($dataToSign, $signature, $privateKeyDecrypted, OPENSSL_ALGO_SHA256);
                     
-                    // Ubah hasil biner signature menjadi teks string base64 agar aman disimpan di DB
-                    $encodedSignature = base64_encode($signature);
-
-                    // 5. UPDATE DATABASE (Tetap menggunakan fungsi bawaanmu, hanya ditambah kolom signature)
-                    $this->record->update([
+                    $record->update([
                         'status' => 'approved',
-                        'approved_by_id' => Auth::id(),
-                        'signature' => $encodedSignature, // Kolom baru yang ditambahkan dari hasil migrasi
+                        'approved_by_id' => $approver->id,
+                        'signature' => base64_encode($signature),
                     ]);
 
                     Notification::make()->title('Permintaan Disetujui!')->success()->send();
@@ -87,7 +80,7 @@ class ViewRequest extends ViewRecord
                     $this->redirect($this->getResource()::getUrl('index'));
                 }),
 
-            // Action to Complete & Dispatch (Admin Gudang)
+            // Action to Complete & Dispatch
             Action::make('complete')
                 ->label('Selesaikan & Kirim')
                 ->icon('heroicon-o-archive-box-arrow-down')
@@ -102,66 +95,32 @@ class ViewRequest extends ViewRecord
                         DB::transaction(function () {
                             $request = $this->record;
                             $totalAmount = 0;
-
-                            // Reload details to ensure fresh state
                             $request->load('details.item');
 
                             foreach ($request->details as $detail) {
-                                // Lock the Item record pessimisticly
                                 $item = \App\Models\Item::where('id', $detail->item_id)->lockForUpdate()->first();
+                                if (!$item) throw new \Exception("Barang dengan ID {$detail->item_id} tidak ditemukan.");
+                                if ($item->stock < $detail->qty_requested) throw new \Exception("Stok barang '{$item->name}' tidak mencukupi.");
 
-                                if (!$item) {
-                                    throw new \Exception("Barang dengan ID {$detail->item_id} tidak ditemukan.");
-                                }
-
-                                if ($item->stock < $detail->qty_requested) {
-                                    throw new \Exception("Stok barang '{$item->name}' tidak mencukupi. Sisa stok: {$item->stock}.");
-                                }
-
-                                // Update stock level and mutation card
-                                $item->updateStockWithMutation(
-                                    type: 'out',
-                                    qty: $detail->qty_requested,
-                                    reference: $request->request_number,
-                                    price: $item->price
-                                );
-
-                                // Snapshot actual transaction price and calculate subtotal
+                                $item->updateStockWithMutation('out', $detail->qty_requested, $request->request_number, $item->price);
                                 $detail->update([
                                     'price_at_transaction' => $item->price,
                                     'subtotal' => $item->price * $detail->qty_requested,
                                 ]);
-
                                 $totalAmount += ($item->price * $detail->qty_requested);
                             }
 
-                            // Finalize Request status and header amount
-                            $request->update([
-                                'status' => 'completed',
-                                'total_amount' => $totalAmount,
-                            ]);
+                            $request->update(['status' => 'completed', 'total_amount' => $totalAmount]);
                         });
 
-                        Notification::make()
-                            ->title('Permintaan Berhasil Diselesaikan!')
-                            ->body('Stok gudang telah dikurangi dan mutasi stok tercatat.')
-                            ->success()
-                            ->send();
-
+                        Notification::make()->title('Permintaan Berhasil Diselesaikan!')->success()->send();
                         $this->redirect($this->getResource()::getUrl('index'));
-
                     } catch (\Exception $e) {
-                        Notification::make()
-                            ->title('Gagal Menyelesaikan Permintaan')
-                            ->body($e->getMessage())
-                            ->danger()
-                            ->persistent()
-                            ->send();
+                        Notification::make()->title('Gagal Menyelesaikan Permintaan')->body($e->getMessage())->danger()->persistent()->send();
                     }
                 }),
 
-            EditAction::make()
-                ->visible(fn () => $this->record->status === 'pending'),
+            EditAction::make()->visible(fn () => $this->record->status === 'pending'),
 
             Action::make('print')
                 ->label('Cetak Permintaan (PDF)')

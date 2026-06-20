@@ -52,33 +52,25 @@ class CreateRequest extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $userId = \Illuminate\Support\Facades\Auth::id();
-        if ($userId) {
-            foreach ($this->record->details as $detail) {
-                \App\Models\Request::clearTempReservation($detail->item_id, $userId);
-            }
-        }
-
         $creator = \Illuminate\Support\Facades\Auth::user();
         $record = $this->record;
-        // ==========================================
-        // LOGIKA GENERATE SIGNATURE PEMINTA (TAMBAHAN)
-        // ==========================================
+
         if ($creator && $creator->private_key) {
-            // 1. Susun string unik data penanda tangan (Sama seperti alur sebelumnya)
-            $dataToSign = "DocID:" . $record->id . 
+            // Gunakan number_format agar selalu 2 desimal
+            $formattedTotal = number_format((float)$record->total_amount, 2, '.', '');
+            
+            $dataToSign = "DocID:{$record->id}" .
+                        "|ReqNo:{$record->request_number}" . 
+                        "|Total:{$formattedTotal}" . 
                         "|Status:pending" .
-                        "|Creator:" . $creator->name .
-                        "|CreatorID:" . $creator->id;
+                        "|Creator:{$creator->name}" .
+                        "|CreatorID:{$creator->id}" .
+                        "|Type:creator";
 
-            // 2. Dekrip Private Key milik staf yang sedang login
             $privateKeyDecrypted = \Illuminate\Support\Facades\Crypt::decryptString($creator->private_key);
-
-            // 3. Proses penandatanganan dengan OpenSSL
             $signature = '';
             openssl_sign($dataToSign, $signature, $privateKeyDecrypted, OPENSSL_ALGO_SHA256);
-
-            // 4. Simpan hasilnya ke kolom baru 'creator_signature'
+            
             $record->creator_signature = base64_encode($signature);
             $record->save();
         }

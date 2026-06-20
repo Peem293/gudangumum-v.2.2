@@ -10,6 +10,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EditPurchaseOrder extends EditRecord
 {
@@ -18,75 +19,66 @@ class EditPurchaseOrder extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            // TOMBOL APPROVE KHUSUS ADMIN & MANAGER PENUNJANG UMUM + VALIDASI TTD DIGITAL
             Action::make('approve')
                 ->label('Approve PO')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
                 ->requiresConfirmation()
                 ->visible(function () {
-                    // 1. Tombol hanya muncul jika status PO di database saat ini adalah 'draft'
                     if ($this->record->status !== 'draft') {
                         return false;
                     }
-
-                    // 2. Ambil data user yang sedang login
                     $user = Auth::user();
-                    if (!$user) {
-                        return false;
-                    }
+                    if (!$user) return false;
 
-                    /**
-                     * KONDISI HAK AKSES (Spatie / Filament Shield):
-                     * - Punya role 'super_admin' ATAU 'administrator'
-                     * - ATAU punya role 'manager' DAN berada di departemen 'Penunjang Umum'
-                     */
                     $isAdmin = $user->hasRole(['super_admin', 'administrator']);
-
-                    // Pastikan Model User Anda memiliki relasi 'department' ke tabel departments
                     $isManagerPenunjangUmum = $user->hasRole('manager') &&
                         ($user->department?->name === 'Penunjang Umum');
 
-                    // Tombol HANYA MUNCUL jika salah satu kondisi di atas terpenuhi
                     return $isAdmin || $isManagerPenunjangUmum;
                 })
                 ->action(function () {
                     $approver = Auth::user();
 
-                    // ==========================================
-                    // TAHAP 1: VALIDASI UTAMA KUNCI TTD DIGITAL
-                    // ==========================================
                     if (!$approver || !$approver->private_key) {
                         Notification::make()
                             ->title('Gagal Menyetujui PO')
-                            ->body('Anda belum mengaktifkan Kunci TTD Digital. Silakan aktivasi terlebih dahulu di menu Users / Profil Anda.')
+                            ->body('Anda belum mengaktifkan Kunci TTD Digital.')
                             ->danger()
                             ->send();
-                            
-                        return; // Menghentikan eksekusi action
+                        return;
                     }
 
                     try {
-                        // ==========================================
-                        // TAHAP 2: PROSES LOGIKA OPENSSL SIGNATURE
-                        // ==========================================
-                        // 1. Susun string data penanda tangan untuk Approval
-                        $dataToSign = "DocID:" . $this->record->id . 
+                        // 1. Ambil data dengan benar (gunakan trim untuk nama untuk konsistensi)
+                        $cleanName = trim($approver->name);
+                        
+                        // 2. MASUKKAN SEMUA DATA KRUSIAL KE SINI (Harus sama urutannya dengan Controller!)
+                        // Pastikan variabel $this->record->po_number dan $this->record->grand_total ada
+                        $formattedTotal = number_format((float)$this->record->grand_total, 2, '.', '');
+
+                        $dataToSign = "DocID:{$this->record->id}" .
+                                    "|PoNo:{$this->record->po_number}" . 
+                                    "|Total:{$formattedTotal}" . // Pakai variable ini
                                     "|Status:approved" .
-                                    "|Approver:" . $approver->name .
-                                    "|ApproverID:" . $approver->id;
+                                    "|Approver:{$cleanName}" .
+                                    "|ApproverID:{$approver->id}" .
+                                    "|doc:po";
 
-                        // 2. Dekrip Private Key milik Manager/Admin yang log-in
                         $privateKeyDecrypted = Crypt::decryptString($approver->private_key);
+                        $configArgs = get_openssl_config_args();
+                        
+                        $privateKeyResource = !empty($configArgs) 
+                            ? openssl_pkey_get_private($privateKeyDecrypted, $configArgs['config']) 
+                            : openssl_pkey_get_private($privateKeyDecrypted);
 
-                        // 3. Generate Signature
+                        if (!$privateKeyResource) {
+                            throw new \Exception("Gagal memuat Private Key.");
+                        }
+
                         $signature = '';
-                        if (openssl_sign($dataToSign, $signature, $privateKeyDecrypted, OPENSSL_ALGO_SHA256)) {
+                        if (openssl_sign($dataToSign, $signature, $privateKeyResource, OPENSSL_ALGO_SHA256)) {
                             
-                            // ==========================================
-                            // TAHAP 3: UPDATE DATABASE ATOMIC (TERMASUK DATA TTD)
-                            // ==========================================
-                            // Menggunakan DB::table untuk memastikan query masuk secara paksa dan bypass row-locking
                             DB::table('purchase_orders')
                                 ->where('id', $this->record->id)
                                 ->update([
@@ -96,24 +88,18 @@ class EditPurchaseOrder extends EditRecord
                                     'updated_at' => now(),
                                 ]);
 
-                            Notification::make()
-                                ->title('Purchase Order Berhasil Di-approve!')
-                                ->success()
-                                ->send();
-
-                            // Redirect kembali ke halaman index list PO Draft
+                            Notification::make()->title('Purchase Order Berhasil Di-approve!')->success()->send();
                             $this->redirect($this->getResource()::getUrl('index'));
 
                         } else {
-                            throw new \Exception("Logika Enkripsi OpenSSL mendeteksi key tidak valid.");
+                            throw new \Exception("Logika OpenSSL gagal menghasilkan tanda tangan.");
                         }
 
                     } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error("Gagal melakukan Approval TTD Digital PO: " . $e->getMessage());
-                        
+                        Log::error("Approval TTD Gagal: " . $e->getMessage());
                         Notification::make()
                             ->title('Error Penandatanganan')
-                            ->body('Gagal membuat tanda tangan digital. Pastikan format key Anda valid.')
+                            ->body('Gagal membuat tanda tangan digital.')
                             ->danger()
                             ->send();
                     }
@@ -121,11 +107,5 @@ class EditPurchaseOrder extends EditRecord
 
             DeleteAction::make(),
         ];
-    }
-
-    // Redirect bawaan jika menekan tombol 'Save' biasa di bawah form
-    protected function getRedirectUrl(): string
-    {
-        return $this->getResource()::getUrl('index');
     }
 }

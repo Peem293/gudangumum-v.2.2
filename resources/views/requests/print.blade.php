@@ -285,7 +285,7 @@
                 <div style="margin: 10px 0;">
                     @if($request->creator_signature)
                         <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
-                            {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'sig' => $request->creator_signature, 'type' => 'creator'])) !!}
+                            {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'reqno' => $request->request_number, 'total' => $request->total_amount, 'sig' => $request->creator_signature, 'type' => 'creator'])) !!}
                         </div>
                     @else
                         <div style="margin-bottom: 65px; color: #666; font-size: 13px; padding-top: 15px;">
@@ -300,7 +300,7 @@
                 <div style="margin: 10px 0;">
                 @if($request->signature)
                     <div style="display: inline-block; padding: 5px; border: 1px solid #ccc; background-color: white;">
-                        {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'sig' => $request->signature])) !!}
+                        {!! QrCode::size(100)->margin(1)->generate(route('document.verify', ['id' => $request->id, 'reqno' => $request->request_number, 'total' => $request->total_amount, 'sig' => $request->signature, 'type' => 'approver'])) !!}
                     </div>
                 @else
                     <div style="margin-bottom: 60px; color: #dc2626; font-weight: bold; font-size: 14px;">

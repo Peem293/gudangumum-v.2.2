@@ -3,56 +3,88 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Requests;
+use App\Models\Request as RequestsModel;
+use App\Models\PurchaseOrder;
 
 class DocumentVerificationController extends Controller
 {
-    public function verify(Request $request)
+    public function verify(Request $request) 
     {
         $id = $request->query('id');
-        $incomingSignature = base64_decode($request->query('sig'));
+        $sigBase64 = $request->query('sig');
+        $type = $request->query('type', 'creator'); 
+        $docType = $request->query('doc', 'request'); 
 
-        // 1. Cari dokumen di database berdasarkan ID dari QR Code
-        // Asumsi relasi ke user peng-approve bernama 'approver' (sesuai approved_by_id)
-        $document = Requests::with('approver')->find($id);
+        // 1. Ambil data dokumen dari Database (Sumber Kebenaran)
+        $document = ($docType === 'po') 
+            ? PurchaseOrder::with(['user', 'approvedBy'])->find($id) 
+            : RequestsModel::with(['user', 'approvedBy'])->find($id);
 
-        if (!$document || !$document->signature) {
+        if (!$document) {
             return view('verification-result', [
-                'status' => 'invalid',
-                'message' => 'Dokumen tidak ditemukan atau belum disetujui secara digital.'
+                'status' => 'invalid', 
+                'message' => 'Dokumen tidak ditemukan.',
+                'docType' => $docType
             ]);
         }
 
-        // 2. REKONSTRUKSI DATA: Susun kembali string data dengan format yang SAMA PERSIS seperti di Tahap 2 tadi
-        $dataToVerify = "DocID:" . $document->id . 
-                        "|Status:approved" .
-                        "|Approver:" . $document->approver->name .
-                        "|ApproverID:" . $document->approved_by_id;
+        // 2. Tentukan variabel berdasarkan jenis dokumen
+        // Gunakan data dari $document (DB), bukan dari $request (URL)
+        $userName = trim(($type === 'creator' ? $document->user->name : ($document->approvedBy->name ?? 'N/A')));
+        $reqNo = ($docType === 'po') ? $document->po_number : $document->request_number;
+        $total = ($docType === 'po') ? $document->grand_total : $document->total_amount;
 
-        // 3. AMBIL PUBLIC KEY: Mengambil kunci publik milik atasan yang meng-approve
-        $publicKey = $document->approver->public_key;
+        $roleName = ($document->approvedBy && $document->approvedBy->roles->isNotEmpty()) 
+            ? ucwords(str_replace('_', ' ', $document->approvedBy->roles->pluck('name')->first())) 
+            : 'User';
 
-        if (!$publicKey) {
-            return view('verification-result', [
-                'status' => 'invalid',
-                'message' => 'Kunci publik verifikator tidak ditemukan.'
-            ]);
-        }
-
-        // 4. PROSES VERIFIKASI: COCOKKAN DATA + SIGNATURE + PUBLIC KEY menggunakan OpenSSL
-        $isValid = openssl_verify($dataToVerify, $incomingSignature, $publicKey, OPENSSL_ALGO_SHA256);
-
-        if ($isValid === 1) {
-            return view('verification-result', [
-                'status' => 'valid',
-                'message' => '✅ DOKUMEN ASLI & VALID',
-                'document' => $document
-            ]);
+        // 3. Rekonstruksi String menggunakan data dari DATABASE
+        // Ini memastikan verifikasi membandingkan "Tanda Tangan Asli" vs "Data Asli di Server"
+        $reqNo = ($docType === 'po') ? $document->po_number : $document->request_number;
+        $formattedTotal = number_format((float)($docType === 'po' ? $document->grand_total : $document->total_amount), 2, '.', '');
+       if ($docType === 'po') {
+            $reqNo = $document->po_number;
+            // Pakai rumus yang SAMA PERSIS dengan di EditPurchaseOrder
+            $formattedTotal = number_format((float)$document->grand_total, 2, '.', '');
+            
+            if ($type === 'creator') {
+                $dataToVerify = "DocType:PO|Identifier:{$document->po_number}|PoNo:{$reqNo}|Total:{$formattedTotal}|Status:pending|Creator:{$userName}|CreatorID:{$document->user_id}";
+                $publicKey = $document->user->public_key ?? null;
+            } else {
+                $dataToVerify = "DocID:{$document->id}|PoNo:{$reqNo}|Total:{$formattedTotal}|Status:{$document->status}|Approver:{$userName}|ApproverID:{$document->approved_by_id}|doc:po";
+                $publicKey = $document->approvedBy->public_key ?? null;
+            }
+        
         } else {
-            return view('verification-result', [
-                'status' => 'invalid',
-                'message' => '❌ PERINGATAN: DOKUMEN TIDAK VALID / SUDAH DIMANIPULASI!'
-            ]);
+            $dataToVerify = ($type === 'creator')
+                ? "DocID:{$document->id}|ReqNo:{$reqNo}|Total:{$total}|Status:pending|Creator:{$userName}|CreatorID:{$document->user_id}|Type:creator"
+                : "DocID:{$document->id}|ReqNo:{$reqNo}|Total:{$total}|Status:approved|Approver:{$userName}|ApproverID:{$document->approved_by_id}";
+            
+            $publicKey = ($type === 'creator') ? $document->user->public_key : ($document->approvedBy->public_key ?? null);
         }
+
+        // 4. Verifikasi Signature
+        $isValid = 0;
+        if ($publicKey) {
+            $cleanKey = trim($publicKey);
+            if (strpos($cleanKey, '-----BEGIN PUBLIC KEY-----') === false) {
+                $cleanKey = "-----BEGIN PUBLIC KEY-----\n" . wordwrap($cleanKey, 64, "\n", true) . "\n-----END PUBLIC KEY-----";
+            }
+            $isValid = openssl_verify($dataToVerify, base64_decode($sigBase64), $cleanKey, OPENSSL_ALGO_SHA256);
+        }
+        $formattedTotal = number_format((float)($docType === 'po' ? $document->grand_total : $document->total_amount), 2, '.', '');
+        return view('verification-result', [
+            'status' => ($isValid === 1) ? 'valid' : 'invalid',
+            'message' => ($isValid === 1) ? '✅ DOKUMEN ASLI & VALID' : '❌ DOKUMEN TIDAK VALID / MANIPULASI!',
+            'document' => $document,
+            'type' => $type,
+            'docType' => $docType,
+            'roleName' => $roleName,
+            'total'    => $formattedTotal,
+            'debug' => [
+                'data_reconstructed' => $dataToVerify,
+                'openssl_error' => ($isValid !== 1) ? openssl_error_string() : 'None'
+            ]
+        ]);
     }
 }

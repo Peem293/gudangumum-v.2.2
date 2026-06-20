@@ -18,48 +18,36 @@ class CreatePurchaseOrder extends CreateRecord
     {
         $creator = Auth::user();
 
-        // 1. Validasi Keberadaan User dan Private Key
         if (!$creator || !$creator->private_key) {
             \Filament\Notifications\Notification::make()
                 ->title('Gagal Membuat Purchase Order')
-                ->body('Anda belum mengaktifkan Kunci TTD Digital. Silakan aktivasi terlebih dahulu di menu Users / Profil Anda.')
+                ->body('Anda belum mengaktifkan Kunci TTD Digital.')
                 ->danger()
                 ->send();
-                
-            $this->halt(); // Menghentikan submit jika key kosong
+            $this->halt();
         }
 
         try {
-            // 2. Susun string unik data penanda tangan
-            // Karena ID belum ada (belum insert), gunakan data nomor PO atau timestamp sebagai identitas unik sementara
-            $uniqueIdentifier = $data['po_number'] ?? ('PO-' . time());
+            // GANTI: Jangan gunakan time(), gunakan data yang tersimpan di database
+            $identifier = $data['po_number']; 
             
             $dataToSign = "DocType:PO" .
-                        "|Identifier:" . $uniqueIdentifier . 
+                        "|Identifier:" . $identifier . 
                         "|Status:pending" .
                         "|Creator:" . $creator->name .
                         "|CreatorID:" . $creator->id;
 
-            // 3. Dekrip Private Key milik user
             $privateKeyDecrypted = Crypt::decryptString($creator->private_key);
 
-            // 4. Proses pembuatan signature menggunakan OpenSSL
             $signature = '';
             if (openssl_sign($dataToSign, $signature, $privateKeyDecrypted, OPENSSL_ALGO_SHA256)) {
-                
-                // 5. MASUKKAN LANGSUNG KE ARRAY DATA FILAMENT
-                // Data ini akan otomatis ikut disimpan saat Filament melakukan query INSERT INTO
                 $data['created_signature'] = base64_encode($signature);
-                
-                // Pastikan user_id pencatat juga terisi menggunakan user yang sedang login
                 $data['user_id'] = $creator->id;
-                
             } else {
-                \Illuminate\Support\Facades\Log::error("OpenSSL gagal membuat signature di PO. Error: " . openssl_error_string());
+                \Illuminate\Support\Facades\Log::error("OpenSSL gagal membuat signature: " . openssl_error_string());
             }
-
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Gagal memproses TTD Digital PO di mutateFormData: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error("Gagal TTD: " . $e->getMessage());
         }
 
         return $data;
