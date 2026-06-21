@@ -9,3 +9,28 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+/* Memaksa container sidebar Filament menjadi flex column */
+aside.fi-sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    position: sticky !important;
+    top: 0;
+}
+
+/* Area Navigasi menjadi flexible dan scrollable */
+.fi-sidebar-nav {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+}
+
+/* Footer dipaksa di bawah */
+.fi-sidebar-footer {
+    flex: 0 0 auto !important;
+    margin-top: auto !important;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    background: inherit;
+    width: 100%;
+}

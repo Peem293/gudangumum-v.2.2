@@ -320,13 +320,16 @@
 
         .chart-wrapper {
             position: relative;
-            height: 280px;
             width: 100%;
+            height: 280px; /* Berikan tinggi spesifik yang konsisten */
+            display: block;
         }
         .doughnut-wrapper {
             position: relative;
-            height: 240px;
             width: 100%;
+            /* Gunakan aspect-ratio agar lingkaran tidak gepeng saat layar mengecil */
+            aspect-ratio: 1 / 1; 
+            max-height: 240px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -509,6 +512,11 @@
         .action-btn:hover {
             background-color: #d97706;
             color: white;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
     </style>
 

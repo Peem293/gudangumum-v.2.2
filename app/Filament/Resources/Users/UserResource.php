@@ -88,6 +88,19 @@ class UserResource extends Resource
                                     ->required(fn(string $operation): bool => $operation === 'create')
                                     ->same('password')
                                     ->helperText('Harus sama dengan password di atas.'),
+
+                                TextInput::make('private_key')
+                                    ->label('Private Key')
+                                    ->unique(User::class, 'private_key', ignoreRecord: true)
+                                    ->dehydrated(true)
+                                    ->readonly()
+                                    ->maxLength(255),
+                                TextInput::make('public_key')
+                                    ->label('Public Key')
+                                    ->unique(User::class, 'public_key', ignoreRecord: true)
+                                    ->dehydrated(true)
+                                    ->readonly()
+                                    ->maxLength(255),
                             ]),
 
                         // ── Baris 2 Kiri: Departemen & Unit ───────────────
@@ -120,14 +133,14 @@ class UserResource extends Resource
                                     })
                                     ->disabled(fn($get) => !$get('department_id'))
                                     ->helperText(fn($get) => !$get('department_id')
-                                        ? 'Pilih departemen terlebih dahulu.'
+                                        ? 'Pilih departemen dahulu.'
                                         : null)
                                     ->live(),
                             ]),
 
                         // ── Baris 2 Kanan: Role & Hak Akses ───────────────
                         Section::make('Role & Hak Akses')
-                            ->description('Tentukan peran dan hak akses pengguna dalam sistem.')
+                            ->description('Hak akses pengguna.')
                             ->icon(Heroicon::OutlinedShieldCheck)
                             ->columnSpan(5)
                             ->schema([
@@ -169,6 +182,7 @@ class UserResource extends Resource
                         'admin_gudang'     => 'warning',
                         'manager'          => 'info',
                         'manager_keuangan' => 'success',
+                        'manager_jangum' => 'success',
                         'staf_unit'        => 'gray',
                         'direktur'         => 'primary',
                         default            => 'gray',

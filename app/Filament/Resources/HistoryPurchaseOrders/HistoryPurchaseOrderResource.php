@@ -71,7 +71,7 @@ class HistoryPurchaseOrderResource extends Resource
         $user = Auth::user();
         if (! $user) return false;
 
-        return $user->hasRole(['administrator', 'direktur', 'admin_gudang'])
+        return $user->hasRole(['administrator', 'direktur', 'manager_jangum', 'manager_keuangan', 'admin_gudang'])
             || $user->isPurchasingManager()
             || $user->isFinanceManager();
     }

@@ -48,7 +48,7 @@ class DocumentVerificationController extends Controller
             $formattedTotal = number_format((float)$document->grand_total, 2, '.', '');
             
             if ($type === 'creator') {
-                $dataToVerify = "DocType:PO|Identifier:{$document->po_number}|PoNo:{$reqNo}|Total:{$formattedTotal}|Status:pending|Creator:{$userName}|CreatorID:{$document->user_id}";
+                $dataToVerify = "DocID:{$document->id}|PoNo:{$reqNo}|Total:{$formattedTotal}|Status:draft|Creator:{$userName}|CreatorID:{$document->user_id}|Type:creator|doc:po";
                 $publicKey = $document->user->public_key ?? null;
             } else {
                 $dataToVerify = "DocID:{$document->id}|PoNo:{$reqNo}|Total:{$formattedTotal}|Status:{$document->status}|Approver:{$userName}|ApproverID:{$document->approved_by_id}|doc:po";

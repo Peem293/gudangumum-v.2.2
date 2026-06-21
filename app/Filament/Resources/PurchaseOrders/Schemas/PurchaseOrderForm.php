@@ -29,12 +29,12 @@ class PurchaseOrderForm
                 TextInput::make('po_number')
                     ->label('Nomor PO')
                     ->default(function () {
-                        $year = date('Y');
-                        $lastPO = PurchaseOrder::where('po_number', 'like', "PO-{$year}-%")->latest('id')->first();
-                        if (!$lastPO) return "PO-{$year}-0001";
-                        $lastNumber = (int) substr($lastPO->po_number, -4);
-                        $nextNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-                        return "PO-{$year}-" . $nextNumber;
+                        $datePrefix = date('ymd');
+                        $lastPO = PurchaseOrder::where('po_number', 'like', "PO-{$datePrefix}%")->latest('id')->first();
+                        if (!$lastPO) return "PO-{$datePrefix}001";
+                        $lastNumber = (int) substr($lastPO->po_number, -3);
+                        $nextNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+                        return "PO-{$datePrefix}" . $nextNumber;
                     })
                     ->disabled()
                     ->dehydrated()
@@ -155,13 +155,28 @@ class PurchaseOrderForm
                             ->required()
                             ->live()
                             ->disabled($isReadOnly)
-                            ->afterStateUpdated(function ($set, $get, $state) {
+                            ->afterStateUpdated(function ($set, $get, $state, $statePath) {
                                 $item = Item::find($state);
+                                $price = 0;
+                                $qty = $get('qty') ?? 1;
                                 if ($item) {
-                                    $set('price_at_purchase', $item->price);
-                                    $qty = $get('qty') ?? 1;
-                                    $set('subtotal', $item->price * $qty);
+                                    $price = $item->price;
+                                    $set('price_at_purchase', $price);
+                                    $set('subtotal', $price * $qty);
+                                } else {
+                                    $set('price_at_purchase', 0);
+                                    $set('subtotal', 0);
                                 }
+
+                                $currentRowKey = null;
+                                if (preg_match('/details\.([^.]+)/', $statePath, $matches)) {
+                                    $currentRowKey = $matches[1];
+                                }
+                                self::updateGrandTotal($set, $get, $currentRowKey, [
+                                    'qty' => $qty,
+                                    'price_at_purchase' => $price,
+                                ]);
+                                
                             }),
 
                         TextInput::make('qty')
@@ -171,9 +186,18 @@ class PurchaseOrderForm
                             ->required()
                             ->live()
                             ->disabled($isReadOnly)
-                            ->afterStateUpdated(function ($set, $get, $state) {
+                            ->afterStateUpdated(function ($set, $get, $state, $statePath) {
                                 $price = $get('price_at_purchase') ?? 0;
                                 $set('subtotal', $price * (int)$state);
+
+                                $currentRowKey = null;
+                                if (preg_match('/details\.([^.]+)/', $statePath, $matches)) {
+                                    $currentRowKey = $matches[1];
+                                }
+                                self::updateGrandTotal($set, $get, $currentRowKey, [
+                                    'qty' => (int)$state,
+                                    'price_at_purchase' => $price,
+                                ]);
                             }),
 
                         TextInput::make('price_at_purchase')
@@ -183,9 +207,18 @@ class PurchaseOrderForm
                             ->required()
                             ->live()
                             ->disabled($isReadOnly)
-                            ->afterStateUpdated(function ($set, $get, $state) {
+                            ->afterStateUpdated(function ($set, $get, $state, $statePath) {
                                 $qty = $get('qty') ?? 1;
                                 $set('subtotal', (float)$state * $qty);
+
+                                $currentRowKey = null;
+                                if (preg_match('/details\.([^.]+)/', $statePath, $matches)) {
+                                    $currentRowKey = $matches[1];
+                                }
+                                self::updateGrandTotal($set, $get, $currentRowKey, [
+                                    'qty' => $qty,
+                                    'price_at_purchase' => (float)$state,
+                                ]);
                             }),
 
                         TextInput::make('subtotal')
@@ -225,30 +258,37 @@ class PurchaseOrderForm
     /**
      * Kalkulasi Handal Berbasis Snapshot Data Historis
      */
-    public static function updateGrandTotal($set, $get): void
+    public static function updateGrandTotal($set, $get, $currentRowKey = null, $currentRowData = []): void
     {
-        $details = $get('details') ?? [];
+        $details = $get('details') ?? $get('../../details') ?? [];
         $totalSubtotal = 0;
 
-        foreach ($details as $detail) {
-            $qty = (int)($detail['qty'] ?? 0);
-            $price = (float)($detail['price_at_purchase'] ?? 0);
+        foreach ($details as $key => $detail) {
+            if ($currentRowKey !== null && (string)$key === (string)$currentRowKey) {
+                $qty = (int)($currentRowData['qty'] ?? 0);
+                $price = (float)($currentRowData['price_at_purchase'] ?? 0);
+            } else {
+                $qty = (int)($detail['qty'] ?? 0);
+                $price = (float)($detail['price_at_purchase'] ?? 0);
+            }
             $totalSubtotal += ($qty * $price);
         }
 
-        $persenPajak = (float)($get('ppn_percentage') ?? 0);
+        $persenPajak = (float)($get('ppn_percentage') ?? $get('../../ppn_percentage') ?? 0);
+        $pajakId = $get('pajak_id') ?? $get('../../pajak_id');
 
-        if ($persenPajak == 0 && $get('pajak_id')) {
-            $pajak = Pajak::find($get('pajak_id'));
+        if ($persenPajak == 0 && $pajakId) {
+            $pajak = Pajak::find($pajakId);
             if ($pajak) {
                 $persenPajak = (float)$pajak->ppn;
             }
         }
 
-        $shippingCost = (float)($get('shipping_cost') ?? 0);
+        $shippingCost = (float)($get('shipping_cost') ?? $get('../../shipping_cost') ?? 0);
         $nilaiPajak = $totalSubtotal * ($persenPajak / 100);
         $grandTotal = $totalSubtotal + $nilaiPajak + $shippingCost;
 
         $set('grand_total', $grandTotal);
+        $set('../../grand_total', $grandTotal);
     }
 }

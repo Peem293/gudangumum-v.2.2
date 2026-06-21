@@ -30,19 +30,19 @@ class CreateRequest extends CreateRecord
         // ==========================================
         // LOGIKA PENOMORAN OTOMATIS (BAWAAN KAMU - TETAP UTUH)
         // ==========================================
-        $year = date('Y');
+        $datePrefix = date('ymd');
         
-        $lastReq = \App\Models\Request::where('request_number', 'like', "REQ-{$year}-%")
+        $lastReq = \App\Models\Request::where('request_number', 'like', "REQ-{$datePrefix}%")
             ->lockForUpdate()
             ->latest('id')
             ->first();
             
         if (!$lastReq) {
-            $nextNumber = "REQ-{$year}-0001";
+            $nextNumber = "REQ-{$datePrefix}001";
         } else {
-            $lastNumber = (int) substr($lastReq->request_number, -4);
-            $nextNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
-            $nextNumber = "REQ-{$year}-" . $nextNumber;
+            $lastNumber = (int) substr($lastReq->request_number, -3);
+            $nextNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+            $nextNumber = "REQ-{$datePrefix}" . $nextNumber;
         }
         
         $data['request_number'] = $nextNumber;
